@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NodeTask - Task Manager</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6fa;
+            margin: 0;
+            padding: 40px 20px;
+            color: #202938;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        h1 { margin-top: 0; }
+
+        form {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .add { background: #2563eb; color: white; }
+        .edit { background: #e5edff; }
+        .delete { background: #fee2e2; }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        li span { flex: 1; overflow-wrap: anywhere; }
+
+        .completed {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        #status {
+            color: #687386;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>NodeTask</h1>
+        <p>Simple task management with Node.js + Express + SQLite.</p>
+
+        <form id="taskForm">
+            <input
+                type="text"
+                id="taskTitle"
+                placeholder="Enter a new task..."
+                required
+            >
+            <button class="add" type="submit">Add</button>
+        </form>
+
+        <ul id="taskList"></ul>
+        <p id="status">Loading tasks...</p>
+    </div>
+
+    <script>
+        const API = '/api/tasks';
+
+        const form = document.getElementById('taskForm');
+        const titleInput = document.getElementById('taskTitle');
+        const taskList = document.getElementById('taskList');
+        const status = document.getElementById('status');
+
+        // API helper
+        async function api(url, options = {}) {
+            const response = await fetch(url, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Request failed');
+            }
+
+            return data;
+        }
+
+        // READ: Display all tasks
+        async function loadTasks() {
+            try {
+                const tasks = await api(API);
+                taskList.replaceChildren();
+
+                tasks.forEach(task => {
+                    const li = document.createElement('li');
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = Boolean(task.completed);
+
+                    const title = document.createElement('span');
+                    title.textContent = task.title;
+
+                    if (task.completed) {
+                        title.classList.add('completed');
+                    }
+
+                    // UPDATE: Mark task completed
+                    checkbox.addEventListener('change', async () => {
+                        try {
+                            await api(`${API}/${task.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({
+                                    completed: checkbox.checked
+                                })
+                            });
+                            loadTasks();
+                        } catch (error) {
+                            alert(error.message);
+                        }
+                    });
+
+                    // UPDATE: Edit task title
+                    const edit = document.createElement('button');
+                    edit.textContent = 'Edit';
+                    edit.className = 'edit';
+
+                    edit.onclick = async () => {
+                        const newTitle = prompt('Edit task:', task.title);
+
+                        if (newTitle === null) return;
+
+                        try {
+                            await api(`${API}/${task.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ title: newTitle })
+                            });
+                            loadTasks();
+                        } catch (error) {
+                            alert(error.message);
+                        }
+                    };
+
+                    // DELETE: Remove task
+                    const del = document.createElement('button');
+                    del.textContent = 'Delete';
+                    del.className = 'delete';
+
+                    del.onclick = async () => {
+                        if (!confirm('Delete this task?')) return;
+
+                        try {
+                            await api(`${API}/${task.id}`, {
+                                method: 'DELETE'
+                            });
+                            loadTasks();
+                        } catch (error) {
+                            alert(error.message);
+                        }
+                    };
+
+                    li.append(checkbox, title, edit, del);
+                    taskList.appendChild(li);
+                });
+
+                status.textContent =
+                    `${tasks.length} task(s) in your database`;
+
+                if (tasks.length === 0) {
+                    status.textContent = 'No tasks yet. Add your first task!';
+                }
+
+            } catch (error) {
+                status.textContent = error.message;
+            }
+        }
+
+        // CREATE: Add new task
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            try {
+                await api(API, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title: titleInput.value
+                    })
+                });
+
+                titleInput.value = '';
+                loadTasks();
+
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Initial load
+        loadTasks();
+    </script>
+</body>
+</html>
